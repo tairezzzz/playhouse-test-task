@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Document</title>
+  <script>
+    (function init() {
+      let uploads = []
+      let uploadIndex = 0
+      let addressEl, videoEl
+      let touchstartX = 0
+      let touchendX = 0
+
+
+      function handleTouchStart(evt) {
+        const firstTouch = evt.touches[0];
+        touchstartX = firstTouch.clientX;
+      }
+
+      function handleTouchMove(evt) {
+        if (!touchstartX) {
+          return;
+        }
+        touchendX = evt.touches[0].clientX;
+
+        if (touchstartX - touchendX > 0) {
+          incrementUpload()
+        } else {
+          decrementUpload()
+        }
+        touchendX = 0;
+        touchstartX = 0;
+      }
+
+      document.addEventListener("DOMContentLoaded", (event) => {
+        console.log('DOM is ready.')
+        loadUploadList()
+          .then(() => {
+            setUploadIndex()
+          })
+        addressEl = document.getElementById('address')
+        videoEl = document.getElementById('video')
+        videoEl.addEventListener('touchstart', handleTouchStart, false);
+        videoEl.addEventListener('touchmove', handleTouchMove, false);
+      });
+
+      async function loadUploadList() {
+        const response = await fetch('/api/upload_list')
+        const json = await response.json()
+        uploads = json
+      }
+
+      function setUploadIndex(index = 0) {
+        uploadIndex = index % uploads.length
+        updateUploadElements()
+      }
+
+      function updateUploadElements() {
+        if (uploads.length === 0) {
+          return
+        }
+
+        const upload = uploads[uploadIndex]
+        videoEl.src = `/videos/${upload.video_file}`
+        videoEl.load()
+        addressEl.textContent = upload.address
+      }
+
+      function incrementUpload() {
+        setUploadIndex(uploadIndex + 1)
+      }
+
+      function decrementUpload() {
+        if (uploadIndex === 0) return;
+        setUploadIndex(uploadIndex - 1)
+      }
+    })()
+  </script>
+</head>
+<body>
+</div>
+<div class="centered-container"
+     style="background: #000000; position: fixed; top: 0; left: 0; bottom: 0; right: 0; z-index: -10;
+     display: flex; align-items: center; justify-content: center">
+  <h2 id='address' style="color: #ffffff; text-align: center; position: absolute; bottom: 30px; padding: 0 10px;">Address</h2>
+  <video id='video' controls style="max-height:100vh; max-width:100vw; position: relative; z-index: -9"></video>
+</div>
+<a href="/upload">Upload New Video</a>
+</body>
+</html>
+
+
+
+

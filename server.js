@@ -1,12 +1,20 @@
 const express = require('express')
 const multer = require('multer')
 const sqlite = require('sqlite3')
+const Mux = require('@mux/mux-node')
+const fs = require('fs')
+const request = require('request')
+const axios = require('axios')
 
 sqlite.verbose()
 const db = new sqlite.Database('./dev.db')
 
 const app = express()
 const PORT = 3000
+const MUX_TOKEN_ID = '937459b4-a9f6-4a62-abbc-e94a7b7df150'
+const MUX_TOKEN_SECRET = '+RxHshgtfYKiJ23S6YJ1ZxiAFq1nDZDIY5nK3aIe31Aww83UVfAjMkO1sBZELybDbCWOuteagga'
+
+const {Video} = new Mux(MUX_TOKEN_ID, MUX_TOKEN_SECRET)
 
 app.use('/videos', express.static('uploads'))
 
@@ -58,7 +66,7 @@ app.get('/uploads/:id', (req, res) => {
 app.get('/api/upload_list', (req, res) => {
   console.log('uploadList');
   db.all(`
-    SELECT id, video_file, address
+    SELECT id, video_file, address, playback_id
     FROM uploads
     ORDER BY id
   `, (err, rows) => {
@@ -66,22 +74,46 @@ app.get('/api/upload_list', (req, res) => {
       res.status(400).send('Bad Request')
       return
     }
-
     res.json(rows)
   })
 })
 
 const upload = multer({dest: 'uploads'})
-app.post('/api/upload', upload.single('video'), (req, res) => {
+app.post('/api/upload', upload.single('video'), async (req, res) => {
   console.log('saving video...')
-  db.run(`
-    INSERT into uploads 
-    (address, video_file, original_video_filename)
-    VALUES (?, ?, ?)
-  `, [req.body.address, req.file.filename, req.file.originalname], function () {
-    res.redirect(`/uploads/${this.lastID}`)
+  const upload = await Video.Uploads.create({
+    cors_origin: `http://localhost:${PORT}/`,
+    new_asset_settings: {
+      playback_policy: 'public'
+    }
   })
-})
+  const stream = fs.createReadStream(`./uploads/${req.file.filename}`).pipe(request.put(upload.url))
+  stream.on('end', async () => {
+    try {
+      const {data: {data: response}} = await axios.get(`https://api.mux.com/video/v1/uploads/${upload.id}`, {
+        headers: {
+          "Content-Type": "application/json"
+        },
+        auth: {
+          username: MUX_TOKEN_ID,
+          password: MUX_TOKEN_SECRET
+        }
+      })
+      const asset = await Video.Assets.get(response.asset_id)
+      db.run(
+          `INSERT into uploads
+            (address, video_file, original_video_filename, playback_id)
+            VALUES (?, ?, ?, ?)`,
+        [req.body.address, req.file.filename, req.file.originalname, asset.playback_ids[0].id],
+        function () {
+          res.redirect(`/uploads/${this.lastID}`)
+        })
+    } catch (e) {
+      console.log(e)
+    }
+  })
+});
+
 
 app.all('*', (req, res) => {
   console.log('uncaught request to ', req.url)

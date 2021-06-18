@@ -5,6 +5,7 @@
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Document</title>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
   <script>
     (function init() {
       let uploads = []
@@ -15,23 +16,23 @@
 
 
       function handleTouchStart(evt) {
-        const firstTouch = evt.touches[0];
-        touchstartX = firstTouch.clientX;
+        const firstTouch = evt.touches[0]
+        touchstartX = firstTouch.clientX
       }
 
       function handleTouchMove(evt) {
         if (!touchstartX) {
-          return;
+          return
         }
-        touchendX = evt.touches[0].clientX;
+        touchendX = evt.touches[0].clientX
 
         if (touchstartX - touchendX > 0) {
           incrementUpload()
         } else {
           decrementUpload()
         }
-        touchendX = 0;
-        touchstartX = 0;
+        touchendX = 0
+        touchstartX = 0
       }
 
       document.addEventListener("DOMContentLoaded", (event) => {
@@ -42,9 +43,12 @@
           })
         addressEl = document.getElementById('address')
         videoEl = document.getElementById('video')
-        videoEl.addEventListener('touchstart', handleTouchStart, false);
-        videoEl.addEventListener('touchmove', handleTouchMove, false);
-      });
+        videoEl.addEventListener('touchstart', handleTouchStart, false)
+        videoEl.addEventListener('touchmove', handleTouchMove, false)
+        videoEl.addEventListener('loadeddata', () => {
+          videoEl.controls = true
+        })
+      })
 
       async function loadUploadList() {
         const response = await fetch('/api/upload_list')
@@ -63,18 +67,31 @@
         }
 
         const upload = uploads[uploadIndex]
-        videoEl.src = `/videos/${upload.video_file}`
-        videoEl.load()
+        const src = `https://stream.mux.com/${upload.playback_id}.m3u8`
+        if (videoEl.canPlayType('application/vnd.apple.mpegurl')) {
+          videoEl.src = src
+        } else if (Hls.isSupported()) {
+          const hls = new Hls();
+          hls.loadSource(src)
+          hls.attachMedia(videoEl);
+        } else {
+          console.error("This is a legacy browser that doesn't support MSE");
+        }
         addressEl.textContent = upload.address
       }
 
       function incrementUpload() {
         setUploadIndex(uploadIndex + 1)
+        videoEl.controls = false
       }
 
       function decrementUpload() {
-        if (uploadIndex === 0) return;
-        setUploadIndex(uploadIndex - 1)
+        if (uploadIndex === 0) {
+          setUploadIndex(uploads.length - 1)
+        } else {
+          setUploadIndex(uploadIndex - 1)
+        }
+        videoEl.controls = false
       }
     })()
   </script>
@@ -84,8 +101,11 @@
 <div class="centered-container"
      style="background: #000000; position: fixed; top: 0; left: 0; bottom: 0; right: 0; z-index: -10;
      display: flex; align-items: center; justify-content: center">
-  <h2 id='address' style="color: #ffffff; text-align: center; position: absolute; bottom: 30px; padding: 0 10px;">Address</h2>
-  <video id='video' controls style="max-height:100vh; max-width:100vw; position: relative; z-index: -9"></video>
+  <h2 id='address'
+      style="color: #ffffff; text-align: center; position: absolute; bottom: 10px; padding: 0 10px; font-size: 14px; background: rgba(0, 0, 0, 0.5)">
+    Address</h2>
+  <video muted autoplay id='video'
+         style="max-height:100vh; max-width:100vw;"></video>
 </div>
 <a href="/upload">Upload New Video</a>
 </body>
